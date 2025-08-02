@@ -535,9 +535,28 @@ def export_results():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        'message': 'Sentiment Analysis API is running!',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/api/health',
+            'analyze': '/api/analyze',
+            'analyze_detailed': '/api/analyze_detailed',
+            'generate_wordcloud': '/api/generate_wordcloud',
+            'export_results': '/api/export_results'
+        }
+    })
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'healthy', 'message': 'Sentiment analysis API is running'})
+    return jsonify({
+        'status': 'healthy', 
+        'message': 'Sentiment analysis API is running',
+        'timestamp': datetime.now().isoformat(),
+        'nltk_data': 'loaded'
+    })
 
 @app.route('/api/generate_wordcloud', methods=['POST'])
 def generate_wordcloud():
@@ -629,6 +648,8 @@ def generate_wordcloud():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
     print("Starting Sentiment Analysis API...")
     print("Available endpoints:")
     print("- POST /api/analyze - Basic sentiment analysis of CSV data")
@@ -636,4 +657,4 @@ if __name__ == '__main__':
     print("- POST /api/generate_wordcloud - Generate sentiment-based word clouds")
     print("- POST /api/export_results - Export analysis results to CSV")
     print("- GET /api/health - Health check")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
