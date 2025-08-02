@@ -415,7 +415,6 @@ def analyze_detailed():
         # Compare with original sentiment if available
         comparison_results = {}
         if sentiment_column in df.columns:
-            from sklearn.metrics import accuracy_score, classification_report
             accuracy = accuracy_score(df[sentiment_column], df['VADER_Sentiment'])
             class_report = classification_report(df[sentiment_column], df['VADER_Sentiment'], output_dict=True)
             comparison_results = {
