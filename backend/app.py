@@ -377,6 +377,137 @@ def analyze_sentiment():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/analyze_detailed', methods=['POST'])
+def analyze_detailed():
+    """
+    Detailed analysis following the exact pattern from the provided cells
+    """
+    try:
+        data = request.json
+        csv_data = data.get('csv_data', [])
+        text_column = data.get('text_column', 'ComplaintText')
+        sentiment_column = data.get('sentiment_column', 'Sentiment')
+        category_column = data.get('category_column', 'Category')
+        id_column = data.get('id_column', 'ComplaintID')
+        
+        if not csv_data or not text_column:
+            return jsonify({'error': 'Missing required data'}), 400
+        
+        # Create DataFrame
+        df = pd.DataFrame(csv_data)
+        
+        # --- Step 1: Text Cleaning and Preprocessing (Cell 2) ---
+        df['CleanedText'] = df[text_column].apply(analyzer.preprocess_text)
+        
+        # --- Step 2: VADER Sentiment Analysis (Cell 3) ---
+        def get_vader_sentiment(text):
+            score = sia.polarity_scores(text)['compound']
+            if score >= 0.05:
+                return 'Positive'
+            elif score <= -0.05:
+                return 'Negative'
+            else:
+                return 'Neutral'
+        
+        df['VADER_Sentiment'] = df['CleanedText'].apply(get_vader_sentiment)
+        df['VADER_Compound'] = df['CleanedText'].apply(lambda text: sia.polarity_scores(text)['compound'])
+        
+        # Compare with original sentiment if available
+        comparison_results = {}
+        if sentiment_column in df.columns:
+            from sklearn.metrics import accuracy_score, classification_report
+            accuracy = accuracy_score(df[sentiment_column], df['VADER_Sentiment'])
+            class_report = classification_report(df[sentiment_column], df['VADER_Sentiment'], output_dict=True)
+            comparison_results = {
+                'accuracy': accuracy,
+                'classification_report': class_report
+            }
+        
+        # --- Step 3: Machine Learning Model (Cell 4) ---
+        ml_results = None
+        if sentiment_column in df.columns and len(df[sentiment_column].dropna()) > 10:
+            texts = df[text_column].fillna('').tolist()
+            labels = df[sentiment_column].fillna('').tolist()
+            ml_results = analyzer.train_ml_model(texts, labels)
+            
+            # Add ML predictions to DataFrame
+            if analyzer.is_trained:
+                df['ML_Sentiment'] = df[text_column].apply(
+                    lambda text: analyzer.predict_ml_sentiment(text)['sentiment'] if analyzer.predict_ml_sentiment(text) else 'Unknown'
+                )
+        
+        # --- Step 4: Category Analysis ---
+        if category_column not in df.columns:
+            df['Category'] = df[text_column].apply(analyzer.categorize_feedback)
+        
+        # --- Step 5: Critical Complaints Analysis (Cell 6) ---
+        critical_complaints = df[df['VADER_Sentiment'] == 'Negative'].copy()
+        critical_complaints = critical_complaints.sort_values(by='VADER_Compound', ascending=True)
+        
+        critical_data = []
+        for index, row in critical_complaints.head(10).iterrows():
+            critical_data.append({
+                'id': row.get(id_column, index),
+                'category': row.get('Category', 'Unknown'),
+                'score': row['VADER_Compound'],
+                'original_text': row[text_column],
+                'cleaned_text': row['CleanedText']
+            })
+        
+        # --- Analysis Results ---
+        sentiment_counts = df['VADER_Sentiment'].value_counts().to_dict()
+        total_count = len(df)
+        
+        sentiment_distribution = [
+            {
+                'sentiment': sentiment,
+                'count': count,
+                'percentage': (count / total_count) * 100
+            }
+            for sentiment, count in sentiment_counts.items()
+        ]
+        
+        # Category sentiment analysis
+        if 'Category' in df.columns:
+            category_sentiment = df.groupby(['Category', 'VADER_Sentiment']).size().unstack(fill_value=0)
+            category_data = []
+            for category in category_sentiment.index:
+                category_data.append({
+                    'category': category,
+                    'positive': category_sentiment.loc[category].get('Positive', 0),
+                    'negative': category_sentiment.loc[category].get('Negative', 0),
+                    'neutral': category_sentiment.loc[category].get('Neutral', 0)
+                })
+        else:
+            category_data = []
+        
+        # Word frequency analysis
+        all_text = ' '.join(df['CleanedText'].tolist())
+        word_freq = Counter(all_text.split())
+        top_words = [{'word': word, 'frequency': freq} for word, freq in word_freq.most_common(20)]
+        
+        response = {
+            'analysis_summary': {
+                'total_records': len(df),
+                'positive_count': sentiment_counts.get('Positive', 0),
+                'negative_count': sentiment_counts.get('Negative', 0),
+                'neutral_count': sentiment_counts.get('Neutral', 0),
+                'most_negative_score': critical_complaints['VADER_Compound'].min() if not critical_complaints.empty else 0
+            },
+            'sentiment_distribution': sentiment_distribution,
+            'category_analysis': category_data,
+            'critical_complaints': critical_data,
+            'top_words': top_words,
+            'vader_comparison': comparison_results,
+            'ml_results': ml_results,
+            'processed_data': df.to_dict('records')
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy', 'message': 'Sentiment analysis API is running'})
