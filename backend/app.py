@@ -507,49 +507,123 @@ def analyze_detailed():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/export_results', methods=['POST'])
+def export_results():
+    """Export analysis results to CSV (following Cell 6 pattern)"""
+    try:
+        data = request.json
+        csv_data = data.get('csv_data', [])
+        
+        if not csv_data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        df = pd.DataFrame(csv_data)
+        
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'sentiment_results_{timestamp}.csv'
+        
+        # Convert DataFrame to CSV string
+        csv_string = df.to_csv(index=False)
+        
+        return jsonify({
+            'filename': filename,
+            'csv_data': csv_string,
+            'record_count': len(df)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy', 'message': 'Sentiment analysis API is running'})
 
 @app.route('/api/generate_wordcloud', methods=['POST'])
 def generate_wordcloud():
+    """Generate word clouds following Cell 5 pattern - separate for positive vs negative"""
     try:
         data = request.json
-        texts = data.get('texts', [])
-        sentiment_filter = data.get('sentiment', 'all')  # 'positive', 'negative', 'neutral', or 'all'
+        csv_data = data.get('csv_data', [])
+        text_column = data.get('text_column', 'ComplaintText')
+        sentiment_column = data.get('sentiment_column', 'VADER_Sentiment')
         
-        if not texts:
-            return jsonify({'error': 'No texts provided'}), 400
+        if not csv_data:
+            return jsonify({'error': 'No data provided'}), 400
         
-        # Filter texts by sentiment if specified
-        if sentiment_filter != 'all':
-            # This would require sentiment analysis results
-            pass
+        df = pd.DataFrame(csv_data)
         
-        # Combine all texts
-        combined_text = ' '.join([analyzer.preprocess_text(text) for text in texts])
+        # Preprocess texts if not already done
+        if 'CleanedText' not in df.columns:
+            df['CleanedText'] = df[text_column].apply(analyzer.preprocess_text)
         
-        if not combined_text.strip():
-            return jsonify({'error': 'No valid text after preprocessing'}), 400
+        # Generate VADER sentiment if not available
+        if sentiment_column not in df.columns:
+            df['VADER_Sentiment'] = df['CleanedText'].apply(
+                lambda text: analyzer.analyze_sentiment_vader(text)['sentiment']
+            )
+            sentiment_column = 'VADER_Sentiment'
         
-        # Generate word cloud
-        wordcloud = WordCloud(
-            width=800,
-            height=400,
-            background_color='white',
-            max_words=100,
-            colormap='viridis'
-        ).generate(combined_text)
+        # Separate texts by sentiment (Cell 5 pattern)
+        negative_text = " ".join(df[df[sentiment_column] == 'Negative']['CleanedText'].tolist())
+        positive_text = " ".join(df[df[sentiment_column] == 'Positive']['CleanedText'].tolist())
+        neutral_text = " ".join(df[df[sentiment_column] == 'Neutral']['CleanedText'].tolist())
         
-        # Convert to base64 image
-        img_buffer = io.BytesIO()
-        wordcloud.to_image().save(img_buffer, format='PNG')
-        img_str = base64.b64encode(img_buffer.getvalue()).decode()
+        result = {'wordclouds': {}}
         
-        return jsonify({
-            'wordcloud_image': f'data:image/png;base64,{img_str}',
-            'word_frequencies': dict(wordcloud.words_)
-        })
+        # Generate word clouds for each sentiment
+        if negative_text.strip():
+            wordcloud_neg = WordCloud(
+                width=800, 
+                height=400, 
+                background_color='white',
+                colormap='Reds'
+            ).generate(negative_text)
+            
+            img_buffer = io.BytesIO()
+            wordcloud_neg.to_image().save(img_buffer, format='PNG')
+            img_str = base64.b64encode(img_buffer.getvalue()).decode()
+            
+            result['wordclouds']['negative'] = {
+                'image': f'data:image/png;base64,{img_str}',
+                'word_frequencies': dict(wordcloud_neg.words_)
+            }
+        
+        if positive_text.strip():
+            wordcloud_pos = WordCloud(
+                width=800, 
+                height=400, 
+                background_color='black',
+                colormap='Greens'
+            ).generate(positive_text)
+            
+            img_buffer = io.BytesIO()
+            wordcloud_pos.to_image().save(img_buffer, format='PNG')
+            img_str = base64.b64encode(img_buffer.getvalue()).decode()
+            
+            result['wordclouds']['positive'] = {
+                'image': f'data:image/png;base64,{img_str}',
+                'word_frequencies': dict(wordcloud_pos.words_)
+            }
+        
+        if neutral_text.strip():
+            wordcloud_neu = WordCloud(
+                width=800, 
+                height=400, 
+                background_color='white',
+                colormap='Blues'
+            ).generate(neutral_text)
+            
+            img_buffer = io.BytesIO()
+            wordcloud_neu.to_image().save(img_buffer, format='PNG')
+            img_str = base64.b64encode(img_buffer.getvalue()).decode()
+            
+            result['wordclouds']['neutral'] = {
+                'image': f'data:image/png;base64,{img_str}',
+                'word_frequencies': dict(wordcloud_neu.words_)
+            }
+        
+        return jsonify(result)
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -557,7 +631,8 @@ def generate_wordcloud():
 if __name__ == '__main__':
     print("Starting Sentiment Analysis API...")
     print("Available endpoints:")
-    print("- POST /api/analyze - Analyze sentiment of CSV data")
-    print("- POST /api/generate_wordcloud - Generate word cloud")
+    print("- POST /api/analyze - Basic sentiment analysis of CSV data")
+    print("- POST /api/analyze_detailed - Detailed analysis following notebook pattern")
+    print("- POST /api/generate_wordcloud - Generate sentiment-based word clouds")
     print("- GET /api/health - Health check")
     app.run(debug=True, host='0.0.0.0', port=5000)
