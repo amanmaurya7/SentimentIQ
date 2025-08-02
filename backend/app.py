@@ -49,6 +49,11 @@ except LookupError:
     nltk.download('wordnet')
     
 try:
+    nltk.data.find('omw-1.4')
+except LookupError:
+    nltk.download('omw-1.4')
+    
+try:
     nltk.data.find('vader_lexicon')
 except LookupError:
     nltk.download('vader_lexicon')
@@ -65,29 +70,30 @@ class SentimentAnalyzer:
         self.is_trained = False
         
     def preprocess_text(self, text):
-        """Clean and preprocess text data"""
+        """Clean and preprocess text data following the exact pattern from the cells"""
         if pd.isna(text):
             return ""
         
         # Convert to lowercase
         text = str(text).lower()
         
-        # Remove URLs, mentions, hashtags, special characters
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-        text = re.sub(r'@\w+|#\w+', '', text)
-        text = re.sub(r'[^a-zA-Z\s]', '', text)
+        # Remove mentions, URLs, and non-alphanumeric characters (following Cell 2 pattern)
+        text = re.sub(r'@[A-Za-z0-9_]+|https?:\S+|[^a-zA-Z\s]', '', text)
         
-        # Tokenize and remove stopwords
+        # Tokenize
         tokens = text.split()
-        tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words and len(word) > 2]
         
-        return ' '.join(tokens)
+        # Lemmatize and remove stopwords (following Cell 2 pattern)
+        cleaned_tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+        
+        return ' '.join(cleaned_tokens)
     
     def analyze_sentiment_vader(self, text):
-        """Analyze sentiment using VADER"""
+        """Analyze sentiment using VADER (following Cell 3 pattern)"""
         scores = sia.polarity_scores(text)
         compound = scores['compound']
         
+        # Use the exact thresholds from Cell 3
         if compound >= 0.05:
             sentiment = 'Positive'
         elif compound <= -0.05:
