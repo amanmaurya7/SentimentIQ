@@ -17,11 +17,22 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@/lib": path.resolve(__dirname, "./src/lib"),
+      "@/components": path.resolve(__dirname, "./src/components"),
     },
   },
   build: {
     rollupOptions: {
       external: [],
+      output: {
+        manualChunks: undefined,
+      },
     },
+    commonjsOptions: {
+      include: [/node_modules/],
+    },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom'],
   },
 }));

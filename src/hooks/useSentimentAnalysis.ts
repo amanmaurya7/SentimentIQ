@@ -101,7 +101,7 @@ const ANALYSIS_STEPS: AnalysisStep[] = [
   }
 ];
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://sentiment-analysis-api-70q7.onrender.com/api';
 
 export const useSentimentAnalysis = () => {
   const [steps, setSteps] = useState<AnalysisStep[]>(ANALYSIS_STEPS);
