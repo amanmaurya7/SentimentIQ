@@ -634,5 +634,6 @@ if __name__ == '__main__':
     print("- POST /api/analyze - Basic sentiment analysis of CSV data")
     print("- POST /api/analyze_detailed - Detailed analysis following notebook pattern")
     print("- POST /api/generate_wordcloud - Generate sentiment-based word clouds")
+    print("- POST /api/export_results - Export analysis results to CSV")
     print("- GET /api/health - Health check")
     app.run(debug=True, host='0.0.0.0', port=5000)
