@@ -129,27 +129,29 @@ class SentimentAnalyzer:
         }
     
     def train_ml_model(self, texts, labels):
-        """Train a machine learning model for sentiment analysis"""
+        """Train a machine learning model for sentiment analysis (following Cell 4 pattern)"""
         if len(set(labels)) < 2:
             return False
             
         # Preprocess texts
         processed_texts = [self.preprocess_text(text) for text in texts]
         
-        # Vectorize
-        X = self.tfidf_vectorizer.fit_transform(processed_texts)
-        
-        # Split data
+        # Split data (following Cell 4 pattern)
         X_train, X_test, y_train, y_test = train_test_split(
-            X, labels, test_size=0.2, random_state=42, stratify=labels
+            processed_texts, labels, test_size=0.2, random_state=42, stratify=labels
         )
         
-        # Train model
-        self.ml_model = LogisticRegression(random_state=42, max_iter=1000)
-        self.ml_model.fit(X_train, y_train)
+        # Vectorize using TF-IDF (following Cell 4 pattern with max_features=2000)
+        self.tfidf_vectorizer = TfidfVectorizer(max_features=2000, stop_words='english')
+        X_train_tfidf = self.tfidf_vectorizer.fit_transform(X_train)
+        X_test_tfidf = self.tfidf_vectorizer.transform(X_test)
+        
+        # Train model (following Cell 4 pattern with liblinear solver)
+        self.ml_model = LogisticRegression(solver='liblinear')
+        self.ml_model.fit(X_train_tfidf, y_train)
         
         # Evaluate
-        y_pred = self.ml_model.predict(X_test)
+        y_pred = self.ml_model.predict(X_test_tfidf)
         accuracy = accuracy_score(y_test, y_pred)
         
         self.is_trained = True
@@ -195,16 +197,18 @@ class SentimentAnalyzer:
         return top_keywords
     
     def categorize_feedback(self, text):
-        """Categorize feedback based on keywords"""
+        """Categorize feedback based on keywords (enhanced categories)"""
         text_lower = text.lower()
         
         categories = {
-            'Customer Service': ['service', 'staff', 'support', 'help', 'representative', 'agent', 'response'],
-            'Product Quality': ['quality', 'product', 'defect', 'broken', 'durability', 'material', 'build'],
-            'Delivery & Shipping': ['delivery', 'shipping', 'package', 'arrived', 'late', 'fast', 'time'],
-            'Pricing': ['price', 'cost', 'expensive', 'cheap', 'value', 'money', 'worth'],
-            'Technical Issues': ['website', 'app', 'technical', 'bug', 'error', 'crash', 'loading'],
-            'User Experience': ['easy', 'difficult', 'confusing', 'intuitive', 'design', 'interface']
+            'Customer Service': ['service', 'staff', 'support', 'help', 'representative', 'agent', 'response', 'customer', 'care'],
+            'Product Quality': ['quality', 'product', 'defect', 'broken', 'durability', 'material', 'build', 'faulty', 'damaged'],
+            'Delivery & Shipping': ['delivery', 'shipping', 'package', 'arrived', 'late', 'fast', 'time', 'order', 'dispatch'],
+            'Pricing': ['price', 'cost', 'expensive', 'cheap', 'value', 'money', 'worth', 'refund', 'payment'],
+            'Technical Issues': ['website', 'app', 'technical', 'bug', 'error', 'crash', 'loading', 'system', 'online'],
+            'User Experience': ['easy', 'difficult', 'confusing', 'intuitive', 'design', 'interface', 'navigation', 'usability'],
+            'Billing': ['bill', 'billing', 'charge', 'invoice', 'account', 'subscription', 'fee'],
+            'Returns & Exchanges': ['return', 'exchange', 'replacement', 'warranty', 'refund', 'policy']
         }
         
         category_scores = {}
@@ -312,15 +316,16 @@ def analyze_sentiment():
             for cat, counts in category_sentiment.items()
         ]
         
-        # Critical complaints (most negative)
+        # Critical complaints (most negative) - following Cell 6 pattern
         negative_results = [r for r in results if r['final_sentiment'] == 'Negative']
         critical_complaints = sorted(
             negative_results,
-            key=lambda x: x['vader']['compound_score']
+            key=lambda x: x['vader']['compound_score']  # Sort by compound score (more negative is worse)
         )[:10]
         
         critical_data = [
             {
+                'id': complaint['id'],
                 'text': complaint['original_text'],
                 'score': complaint['vader']['compound_score'],
                 'category': complaint['category'],
